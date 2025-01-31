@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chatbot</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; }
+        .chatbox { width: 80%; max-width: 500px; margin: auto; padding: 20px; border: 1px solid #ccc; border-radius: 10px; }
+        .message { padding: 10px; margin: 5px 0; border-radius: 5px; }
+        .user { background-color: #cce5ff; text-align: left; }
+        .bot { background-color: #d4edda; text-align: left; }
+    </style>
+</head>
+<body>
+    <h2>STEM Lab Assistant</h2>
+    <div class="chatbox" id="chatbox">
+        <div class="message bot">Hi! Ask me anything about your lab project.</div>
+    </div>
+    <input type="text" id="userInput" placeholder="Type a question..." onkeypress="handleKey(event)">
+    <button onclick="sendMessage()">Send</button>
+
+    <script>
+        function handleKey(event) {
+            if (event.key === "Enter") sendMessage();
+        }
+
+        function sendMessage() {
+            let inputBox = document.getElementById("userInput");
+            let message = inputBox.value.trim();
+            if (!message) return;
+
+            let chatbox = document.getElementById("chatbox");
+            chatbox.innerHTML += `<div class='message user'>${message}</div>`;
+            inputBox.value = "";
+
+            fetch("/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message: message })
+            })
+            .then(response => response.json())
+            .then(data => {
+                chatbox.innerHTML += `<div class='message bot'>${data.response}</div>`;
+            });
+        }
+    </script>
+</body>
+</html>
