@@ -1,0 +1,84 @@
+from flask import Flask, request, jsonify, render_template
+import openai
+import requests
+import base64
+from google.cloud import speech, texttospeech
+
+app = Flask(__name__)
+
+# Set API Keys
+openai.api_key = "your_openai_api_key"
+
+# 🌎 Translation Function
+def translate_text(text, target_lang="es"):
+    url = "https://api.mymemory.translated.net/get"
+    params = {"q": text, "langpair": f"en|{target_lang}"}
+    response = requests.get(url, params=params).json()
+    return response["responseData"]["translatedText"]
+
+# 🎨 DALL-E Image Generation
+def get_ai_image(prompt):
+    response = openai.Image.create(
+        prompt=prompt,
+        n=1,
+        size="1024x1024"
+    )
+    return response["data"][0]["url"]
+
+# 🎙️ Voice-to-Text (Google Speech-to-Text)
+def speech_to_text(audio_data):
+    client = speech.SpeechClient()
+    audio = speech.RecognitionAudio(content=audio_data)
+    config = speech.RecognitionConfig(
+        encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
+        language_code="en-US"
+    )
+    response = client.recognize(config=config, audio=audio)
+    return response.results[0].alternatives[0].transcript if response.results else "Could not recognize speech."
+
+# 🔊 Text-to-Speech (Google Text-to-Speech)
+def text_to_speech(text):
+    client = texttospeech.TextToSpeechClient()
+    synthesis_input = texttospeech.SynthesisInput(text=text)
+    voice = texttospeech.VoiceSelectionParams(
+        language_code="en-US",
+        ssml_gender=texttospeech.SsmlVoiceGender.NEUTRAL
+    )
+    audio_config = texttospeech.AudioConfig(
+        audio_encoding=texttospeech.AudioEncoding.LINEAR16
+    )
+    response = client.synthesize_speech(input=synthesis_input, voice=voice, audio_config=audio_config)
+    return base64.b64encode(response.audio_content).decode("utf-8")
+
+# Chatbot Route
+@app.route("/chat", methods=["POST"])
+def chat():
+    user_input = request.json["message"]
+    
+    if "translate" in user_input:
+        lang = user_input.split()[-1]
+        translated = translate_text(user_input.replace(f"translate to {lang} ", ""), lang)
+        return jsonify({"response": translated})
+    
+    elif "show me an image of" in user_input.lower():
+        image_url = get_ai_image(user_input)
+        return jsonify({"response": f"<img src='{image_url}' width='300px'/>"})
+
+    elif "speak" in user_input.lower():
+        text = user_input.replace("speak ", "")
+        audio_b64 = text_to_speech(text)
+        return jsonify({"response": f"<audio controls><source src='data:audio/wav;base64,{audio_b64}' type='audio/wav'></audio>"})
+    
+    else:
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": user_input}]
+        )
+        return jsonify({"response": response["choices"][0]["message"]["content"]})
+
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+if __name__ == "__main__":
+    app.run(debug=True)
